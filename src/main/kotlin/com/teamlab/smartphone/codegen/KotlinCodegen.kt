@@ -3,12 +3,17 @@ package com.teamlab.smartphone.codegen
 import io.swagger.codegen.*
 import io.swagger.codegen.languages.JavaClientCodegen
 import io.swagger.models.Model
+import io.swagger.models.Operation
+import io.swagger.models.properties.Property
+import io.swagger.models.properties.StringProperty
+import io.swagger.models.properties.UUIDProperty
+import org.apache.commons.lang3.StringUtils
 
 class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     override fun getTag() = CodegenType.CLIENT
     override fun getName() = "kotlin"
     override fun getHelp() = "Generate a Kotlin client."
-    override fun toApiName(name: String?) = "Api"
+    //override fun toApiName(name: String?) = "Api"
 
     init {
         supportsInheritance = false
@@ -54,7 +59,8 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
                 "array",
                 "string",
                 "List",
-                "Map")
+                "Map",
+                "UUID")
         (languageSpecificPrimitives as MutableSet) += setOf(
                 "Boolean",
                 "Double",
@@ -89,6 +95,7 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     }
 
     override fun fromModel(name: String, model: Model, allDefinitions: MutableMap<String, Model>): CodegenModel {
+        //println(" | "+name.replace("ViewModel","RequestModel")+" [fromModel]")
         return super.fromModel(name, model, allDefinitions).apply {
             imports.remove("ApiModelProperty")
             imports.remove("ApiModel")
@@ -96,6 +103,8 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     }
 
     override fun postProcessOperations(objs: MutableMap<String, Any>): MutableMap<String, Any> {
+        //println(PrettyPrintingMap(objs).toString())
+
         super.postProcessOperations(objs)
         @Suppress("UNCHECKED_CAST")
         (objs["operations"] as? Map<String, Any>)?.let {
@@ -105,6 +114,90 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
         }
         return objs
     }
+
+    override fun postProcessModelsEnum(objs: MutableMap<String, Any>?): MutableMap<String, Any> {
+        println(PrettyPrintingMap(objs ?: emptyMap()).toString())
+        return super.postProcessModelsEnum(objs)
+    }
+
+    override fun getSwaggerType(p: Property?): String {
+        if (p is UUIDProperty) {
+            return super.getSwaggerType(StringProperty())
+        } else {
+            return super.getSwaggerType(p)
+        }
+    }
+
+    override fun getOrGenerateOperationId(operation: Operation, path: String, httpMethod: String): String {
+        var operationId = ""//operation.operationId
+        if (StringUtils.isBlank(operationId)) {
+            var tmpPath = path.replace("\\{".toRegex(), "")
+            tmpPath = tmpPath.replace("\\}".toRegex(), "")
+            val parts = (httpMethod + "/" + tmpPath).split("/".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+            val builder = StringBuilder()
+            if ("/" == tmpPath) {
+                builder.append("root")
+            }
+
+            val `arr$` = parts
+            val `len$` = parts.size
+
+            for (`i$` in 0..`len$` - 1) {
+                var part = `arr$`[`i$`]
+                if (part.length > 0) {
+                    if (builder.toString().length == 0) {
+                        part = Character.toLowerCase(part[0]) + part.substring(1)
+                    } else {
+                        part = this.initialCaps(part)
+                    }
+
+                    builder.append(part)
+                }
+            }
+
+            operationId = this.sanitizeName(builder.toString())
+            LOGGER.warn("Empty operationId found for path: $httpMethod $path. Renamed to auto-generated operationId: $operationId")
+        }
+
+        return operationId
+    }
+
+    override fun toModelName(name: String): String {
+        return this.initialCaps(this.modelNamePrefix + removeViewModelToResponse(name) + this.modelNameSuffix)
+    }
+
+    private fun removeViewModelToResponse(name: String): String {
+        if (name.endsWith("viewmodel",ignoreCase = true)) {
+            return name.substring(0,name.length-9)+"RequestModel"
+        } else {
+            return name+"APIModel"
+        }
+    }
 }
 
 fun main(vararg args: String) = SwaggerCodegen.main(args)
+
+class PrettyPrintingMap<K, V>(map: Map<K, V>) {
+    val map: Map<K, V>
+
+    init {
+        this.map = map;
+    }
+
+    override fun toString(): String {
+        val sb = StringBuilder()
+        val iter = map.entries.iterator()
+        while (iter.hasNext()) {
+            val entry = iter.next()
+            sb.append(entry.key)
+            sb.append('=').append('"')
+            sb.append(entry.value)
+            sb.append('"')
+            if (iter.hasNext()) {
+                sb.append(',').append(' ')
+            }
+        }
+        return sb.toString()
+
+    }
+}

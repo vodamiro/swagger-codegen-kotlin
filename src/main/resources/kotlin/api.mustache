@@ -5,6 +5,9 @@ import retrofit2.http.*
 
 import io.reactivex.*
 
+import cz.synetech.app.data.generalmodels.APIResponse
+import cz.synetech.app.data.generalmodels.NoData
+
 {{#imports}}import {{import}}
 {{/imports}}
 
@@ -34,7 +37,7 @@ interface {{classname}} {
     @{{httpMethod}}("{{{path}}}")
     fun {{operationId}}({{^allParams}}){{/allParams}}{{#allParams}}
             {{>params}}{{#hasMore}},{{/hasMore}}{{^hasMore}}){{/hasMore}}{{/allParams}}
-            : {{>returnRx2Type}}{{#returnType}}<{{.}}>{{/returnType}}
+            : {{>returnRx2Type}}{{#returnType}}<APIResponse<{{.}}>>{{/returnType}}
 
     {{/operation}}
 }
