@@ -7,15 +7,29 @@ import io.swagger.models.Operation
 import io.swagger.models.properties.Property
 import io.swagger.models.properties.StringProperty
 import io.swagger.models.properties.UUIDProperty
-import org.apache.commons.lang3.StringUtils
 
 class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     override fun getTag() = CodegenType.CLIENT
     override fun getName() = "kotlin"
     override fun getHelp() = "Generate a Kotlin client."
     //override fun toApiName(name: String?) = "Api"
+    val searchPostfixInModelName: String
+    val replacePostfixInModelName: String
+    val defaultPostfixInModelName: String
+
 
     init {
+        // region Settings
+
+        apiPackage = "cz.synetech.app.data.api"
+        modelPackage = "cz.synetech.app.data.model"
+        searchPostfixInModelName = "viewmodel"     // If this postfix is found
+        replacePostfixInModelName = "RequestModel" // will be replaced with this string
+        defaultPostfixInModelName = "APIModel"   // otherwise there will be added this postfix
+
+        // endregion
+
+        // region Kotlin generating configuration
         supportsInheritance = false
         templateDir = "kotlin"
         embeddedTemplateDir = "kotlin"
@@ -87,7 +101,40 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
         (importMapping as MutableMap) += mapOf(
                 "Date" to "java.util.Date",
                 "UUID" to "java.util.UUID")
+        // endregion
     }
+
+    /**
+     * Function for generating API request function name
+     */
+    override fun getOrGenerateOperationId(operation: Operation, path: String, httpMethod: String): String {
+        var tmpPath = path.replace("\\{".toRegex(), "")
+        tmpPath = tmpPath.replace("\\}".toRegex(), "")
+        val parts = (httpMethod + "/" + tmpPath).split("/".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+        val builder = StringBuilder()
+        if ("/" == tmpPath) {
+            builder.append("root")
+        }
+
+        val args = parts
+        val lengths = parts.size
+
+        for (i in 0..lengths - 1) {
+            var part = args[i]
+            if (part.length > 0) {
+                if (builder.toString().length == 0) {
+                    part = Character.toLowerCase(part[0]) + part.substring(1)
+                } else {
+                    part = this.initialCaps(part)
+                }
+
+                builder.append(part)
+            }
+        }
+        return this.sanitizeName(builder.toString())
+    }
+
+    // region Other overridden function
 
     override fun processOpts() {
         super.processOpts()
@@ -128,51 +175,18 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
         }
     }
 
-    override fun getOrGenerateOperationId(operation: Operation, path: String, httpMethod: String): String {
-        var operationId = ""//operation.operationId
-        if (StringUtils.isBlank(operationId)) {
-            var tmpPath = path.replace("\\{".toRegex(), "")
-            tmpPath = tmpPath.replace("\\}".toRegex(), "")
-            val parts = (httpMethod + "/" + tmpPath).split("/".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-            val builder = StringBuilder()
-            if ("/" == tmpPath) {
-                builder.append("root")
-            }
-
-            val `arr$` = parts
-            val `len$` = parts.size
-
-            for (`i$` in 0..`len$` - 1) {
-                var part = `arr$`[`i$`]
-                if (part.length > 0) {
-                    if (builder.toString().length == 0) {
-                        part = Character.toLowerCase(part[0]) + part.substring(1)
-                    } else {
-                        part = this.initialCaps(part)
-                    }
-
-                    builder.append(part)
-                }
-            }
-
-            operationId = this.sanitizeName(builder.toString())
-            LOGGER.warn("Empty operationId found for path: $httpMethod $path. Renamed to auto-generated operationId: $operationId")
-        }
-
-        return operationId
-    }
-
     override fun toModelName(name: String): String {
         return this.initialCaps(this.modelNamePrefix + removeViewModelToResponse(name) + this.modelNameSuffix)
     }
 
     private fun removeViewModelToResponse(name: String): String {
-        if (name.endsWith("viewmodel",ignoreCase = true)) {
-            return name.substring(0,name.length-9)+"RequestModel"
+        if (name.endsWith(searchPostfixInModelName, ignoreCase = true)) {
+            return name.substring(0, name.length - searchPostfixInModelName.length) + replacePostfixInModelName
         } else {
-            return name+"APIModel"
+            return name + defaultPostfixInModelName
         }
     }
+    //endregion
 }
 
 fun main(vararg args: String) = SwaggerCodegen.main(args)
