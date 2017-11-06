@@ -142,7 +142,7 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     }
 
     override fun fromModel(name: String, model: Model, allDefinitions: MutableMap<String, Model>): CodegenModel {
-        //println(" | "+name.replace("ViewModel","RequestModel")+" [fromModel]")
+        println(" | " + name.replace("ViewModel", "RequestModel") + " [fromModel]")
         return super.fromModel(name, model, allDefinitions).apply {
             imports.remove("ApiModelProperty")
             imports.remove("ApiModel")
@@ -176,7 +176,7 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     }
 
     override fun toModelName(name: String): String {
-        return this.initialCaps(this.modelNamePrefix + removeViewModelToResponse(name) + this.modelNameSuffix)
+        return this.initialCaps(this.modelNamePrefix + removeViewModelToResponse(name).removeIllegalSymbols() + this.modelNameSuffix)
     }
 
     private fun removeViewModelToResponse(name: String): String {
@@ -185,6 +185,10 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
         } else {
             return name + defaultPostfixInModelName
         }
+    }
+
+    private fun String.removeIllegalSymbols(): String {
+        return this.replace("[", "").replace("]", "")
     }
     //endregion
 }
