@@ -7,6 +7,7 @@ import io.swagger.models.Operation
 import io.swagger.models.properties.Property
 import io.swagger.models.properties.StringProperty
 import io.swagger.models.properties.UUIDProperty
+import java.util.*
 
 class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     override fun getTag() = CodegenType.CLIENT
@@ -20,7 +21,7 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
 
     init {
         // region Settings
-
+        this.languageSpecificPrimitives = HashSet(Arrays.asList("String", "boolean", "Boolean", "Double", "Integer", "Long", "Float", "Object", "Array<Byte>"))
         apiPackage = "cz.synetech.app.data.api"
         modelPackage = "cz.synetech.app.data.model"
         searchPostfixInModelName = "viewmodel"     // If this postfix is found
