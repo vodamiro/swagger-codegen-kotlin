@@ -18,7 +18,7 @@ plugins {
 }
 
 application {
-    mainClassName = "io.swagger.codegen.SwaggerCodegen"
+    mainClassName = "com.teamlab.smartphone.codegen.KotlinCodegenKt"//"io.swagger.codegen.SwaggerCodegen"
 }
 
 repositories {
