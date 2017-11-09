@@ -40,7 +40,7 @@ interface {{classname}} {
     @{{httpMethod}}("{{{path}}}")
     fun {{operationId}}({{^allParams}}){{/allParams}}{{#allParams}}
             {{>params}}{{#hasMore}},{{/hasMore}}{{^hasMore}}){{/hasMore}}{{/allParams}}
-            : {{>returnRx2Type}}{{#returnType}}<APIResponse<{{.}}>>{{/returnType}}
+            : {{>returnRx2Type}}{{#returnType}}<APIResponse<{{{.}}}>>{{/returnType}}
 
     {{/operation}}
 }

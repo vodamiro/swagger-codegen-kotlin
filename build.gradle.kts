@@ -28,6 +28,8 @@ repositories {
 dependencies {
     compile(kotlin("stdlib-jre8"))
     compile("io.swagger:swagger-codegen-cli:2.2.2")
+   compile("com.google.code.gson:gson:2.8.0")
+    compile(kotlinModule("reflect", "1.1.3-2"))
 }
 
 tasks {

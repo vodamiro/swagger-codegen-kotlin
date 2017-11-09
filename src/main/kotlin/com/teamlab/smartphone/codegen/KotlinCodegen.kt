@@ -1,16 +1,14 @@
 package com.teamlab.smartphone.codegen
 
+import com.google.gson.Gson
 import io.swagger.codegen.*
 import io.swagger.codegen.languages.JavaClientCodegen
 import io.swagger.models.Model
 import io.swagger.models.Operation
-import io.swagger.models.properties.Property
-import io.swagger.models.properties.StringProperty
-import io.swagger.models.properties.UUIDProperty
+import io.swagger.models.Swagger
+import io.swagger.models.properties.*
 import java.io.File
-import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.collections.HashSet
 
 private const val STAGE_MODEL = 1
 private const val STAGE_API = 2
@@ -22,7 +20,7 @@ private const val CODEGEN_IGNORE_FILE = ".swagger-codegen-ignore"
 
 
 val generationStage = AtomicInteger(0)
-
+val gson = Gson()
 
 class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
     override fun getTag() = CodegenType.CLIENT
@@ -39,10 +37,14 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
         // region Settings
         apiPackage = API_PACKAGE
         modelPackage = MODEL_PACKAGE
-        searchPostfixInModelName = "viewmodel"     // If this postfix is found
-        replacePostfixInModelName = "RequestModel" // will be replaced with this string
-        defaultPostfixInModelName = "APIModel"   // otherwise there will be added this postfix
+        /*searchPostfixInModelName = "viewmodel"     // If this postfix is found
+          replacePostfixInModelName = "RequestModel" // will be replaced with this string
+          defaultPostfixInModelName = "APIModel"   // otherwise there will be added this postfix
+  */
 
+        searchPostfixInModelName = ""     // If this postfix is found
+        replacePostfixInModelName = "" // will be replaced with this string
+        defaultPostfixInModelName = ""   // otherwise there will be added this postfix
         // endregion
 
         // region Kotlin generating configuration
@@ -163,33 +165,69 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
 
 
     override fun fromModel(name: String, model: Model, allDefinitions: MutableMap<String, Model>): CodegenModel {
-        apiModelName.add(name)
-        //println(" | " + name.replace("ViewModel", "RequestModel") + " [fromModel]")
         return super.fromModel(name, model, allDefinitions).apply {
             imports.remove("ApiModelProperty")
             imports.remove("ApiModel")
+            imports.remove("IOException")
+            imports.remove("JsonAdapter")
+            imports.remove("JsonWriter")
+            imports.remove("TypeAdapter")
+            imports.remove("JsonReader")
         }
     }
 
-    override fun postProcessOperations(objs: MutableMap<String, Any>): MutableMap<String, Any> {
-        //println(PrettyPrintingMap(objs).toString())
-
-        super.postProcessOperations(objs)
+    override fun postProcessOperations(objs: Map<String, Any>): Map<String, Any> {
+        val newMap = super.postProcessOperations(objs)
         @Suppress("UNCHECKED_CAST")
-        (objs["operations"] as? Map<String, Any>)?.let {
+        (newMap["operations"] as? Map<String, Any>)?.let {
             (it["operation"] as? List<CodegenOperation>)?.forEach {
                 it.path = it.path.removePrefix("/")
             }
         }
-        return objs
+        return newMap
     }
 
-    /*
-        override fun postProcessModelsEnum(objs: MutableMap<String, Any>?): MutableMap<String, Any> {
-            //println(PrettyPrintingMap(objs ?: emptyMap()).toString())
-            return super.postProcessModelsEnum(objs)
+    override fun fromOperation(path: String?, httpMethod: String?, operation: Operation?, definitions: MutableMap<String, Model>?, swagger: Swagger?): CodegenOperation {
+        val op = super.fromOperation(path, httpMethod, operation, definitions, swagger)
+
+        val returnTypeObject = definitions?.entries?.find {
+            it.key.removeIllegalSymbols() == op.returnType
+        }?.value
+
+        val modelInfo = returnTypeObject?.properties?.get("content")
+
+        val newImports = HashSet<String>()
+
+        op.imports.forEach {
+            val correctName = it.removeIllegalModelStartNames()
+            if (!languageSpecificPrimitives.contains(correctName)) {
+                newImports.add(it.removeIllegalModelStartNames())
+            }
         }
-    */
+
+        op.imports = newImports
+
+        if (op.returnType != null) {
+            op.returnType = op.returnType.removeIllegalModelStartNames()
+        }
+
+        if (modelInfo != null) {
+            if (modelInfo.type == "array") {
+                val newReturnTypeObject = ((modelInfo as? ArrayProperty)?.items as? RefProperty)?.simpleRef
+                if (newReturnTypeObject != null) {
+                    op.returnType = "List<$newReturnTypeObject>"
+                }
+            } else if (modelInfo.type == "ref") {
+                val newReturnTypeObject = (modelInfo as? RefProperty)?.simpleRef
+                if (newReturnTypeObject != null) {
+                    op.returnType = newReturnTypeObject.removeIllegalModelStartNames()
+                }
+            }
+        }
+
+        return op
+    }
+
     override fun getSwaggerType(p: Property?): String {
         if (p is UUIDProperty) {
             return super.getSwaggerType(StringProperty())
@@ -198,42 +236,12 @@ class KotlinCodegen : JavaClientCodegen(), CodegenConfig {
         }
     }
 
-    override fun toModelName(name: String): String {
-        // if (apiModelName.contains(name)) {
-        //     println("ToApiModel: "+name)
-
-        val namem = if (generationStage.get() == STAGE_API) {
-            name.replace(Regex("^MetaResponse"), "").replace(Regex("^Response"), "").replace(Regex("^Meta"), "")
-        } else {
-            name
-        }.removeIllegalSymbols()
-
-        return this.initialCaps(this.modelNamePrefix + removeViewModelToResponse(namem).removeIllegalSymbols() + this.modelNameSuffix)
-//
-        //  } else {
-        //      println("Original: "+name)
-        //      return super.toModelName(name)
-        //  }
-        //return this.initialCaps(name.removeIllegalSymbols())
-    }
-
-    private fun removeViewModelToResponse(name: String): String {
-        if (name.contains("string")) {
-            println("NAMEE: " + name)
-        }
-        if (languageSpecificPrimitives.contains(name)) {
-            return name
-        }
-
-        if (name.endsWith(searchPostfixInModelName, ignoreCase = true)) {
-            return name.substring(0, name.length - searchPostfixInModelName.length) + replacePostfixInModelName
-        } else {
-            return name + defaultPostfixInModelName
-        }
-    }
-
     private fun String.removeIllegalSymbols(): String {
         return this.replace("[", "").replace("]", "")
+    }
+
+    private fun String.removeIllegalModelStartNames(): String {
+        return this.replace(Regex("^MetaResponse"), "").replace(Regex("^Response"), "")
     }
     //endregion
 }
@@ -320,7 +328,7 @@ fun setCodegenIgnore(outputDir: String, ignoreString: String) {
 
 }
 
-class PrettyPrintingMap<K, V>(map: Map<K, V>) {
+class PrettyPrintingMap<K : Any, V : Any>(map: Map<K, V>) {
     val map: Map<K, V>
 
     init {
@@ -333,9 +341,11 @@ class PrettyPrintingMap<K, V>(map: Map<K, V>) {
         while (iter.hasNext()) {
             val entry = iter.next()
             sb.append(entry.key)
-            sb.append('=').append('"')
+            sb.append('=')
+            sb.append('"')
             sb.append(entry.value)
             sb.append('"')
+            sb.append('\n')
             if (iter.hasNext()) {
                 sb.append(',').append(' ')
             }
